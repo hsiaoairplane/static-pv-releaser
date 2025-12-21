@@ -39,29 +39,3 @@ This leaves the PVC stuck in Pending, requiring manual PV editing.
        resourceVersion: ""
    ```
 1. Letting Kubernetes re-bind the PV to the new PVC
-
-## 🚦 Event Handling
-| Event Type | Handled |
-| --- | --- |
-| PVC Create | ✅ |
-| PVC Update | ✅ |
-| PVC Delete | ❌ Ignored |
-| Generic / Resync | ❌ Ignored |
-
-Delete events are explicitly filtered using controller-runtime predicates.
-
-## 🧠 Reconciliation Logic
-PVC Create / Update
-        ↓
-PVC phase == Pending
-        ↓
-PVC has bind conflict ("already bound")
-        ↓
-Find PV with:
-  - claimRef != nil
-  - ReclaimPolicy == Retain
-  - Status == Released
-        ↓
-Clear claimRef.uid + resourceVersion
-        ↓
-Kubernetes retries binding
