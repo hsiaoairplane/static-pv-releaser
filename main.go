@@ -98,7 +98,10 @@ func (r *PVCReclaimerReconciler) Reconcile(ctx context.Context, req ctrl.Request
 		}
 
 		// If PV is bound to previous PVC (pv.Spec.ClaimRef.UID != pvc.UID), clear ClaimRef.UID and ClaimRef.ResourceVersion
-		logger.Info("To Release PV %s claimRef with PVC %s/%s UID %v", pv.Name, pv.Spec.ClaimRef.Name, pv.Spec.ClaimRef.Namespace, pv.Spec.ClaimRef.UID)
+		logger.Info("releasing PV claimRef",
+			"pv", pv.Name,
+			"pvc", pv.Spec.ClaimRef.Namespace+"/"+pv.Spec.ClaimRef.Name,
+			"uid", pv.Spec.ClaimRef.UID)
 
 		patch := client.MergeFrom(pv.DeepCopy())
 		pv.Spec.ClaimRef.UID = ""
@@ -109,7 +112,10 @@ func (r *PVCReclaimerReconciler) Reconcile(ctx context.Context, req ctrl.Request
 			staticPVReleaserFailureTotal.WithLabelValues(pv.Name).Inc()
 
 			// Log failure
-			logger.Info("Failed to release PV %s claimRef with PVC %s/%s UID %v", pv.Name, pv.Spec.ClaimRef.Name, pv.Spec.ClaimRef.Namespace, pv.Spec.ClaimRef.UID)
+			logger.Error(err, "failed to release PV claimRef",
+				"pv", pv.Name,
+				"pvc", pv.Spec.ClaimRef.Namespace+"/"+pv.Spec.ClaimRef.Name,
+				"uid", pv.Spec.ClaimRef.UID)
 
 			return ctrl.Result{}, err
 		}
@@ -118,7 +124,10 @@ func (r *PVCReclaimerReconciler) Reconcile(ctx context.Context, req ctrl.Request
 		staticPVReleaserSuccessTotal.WithLabelValues(pv.Name).Inc()
 
 		// Log success
-		logger.Info("Successfully released PV %s claimRef with PVC %s/%s UID %v", pv.Name, pv.Spec.ClaimRef.Name, pv.Spec.ClaimRef.Namespace, pv.Spec.ClaimRef.UID)
+		logger.Info("successfully released PV claimRef",
+			"pv", pv.Name,
+			"pvc", pv.Spec.ClaimRef.Namespace+"/"+pv.Spec.ClaimRef.Name,
+			"uid", pv.Spec.ClaimRef.UID)
 
 		return ctrl.Result{}, nil
 	}
@@ -195,6 +204,7 @@ var (
 	setupLog             = ctrl.Log.WithName("setup")
 	enableLeaderElection bool
 	namespace            string
+	probeAddr            string
 )
 
 func init() {
@@ -206,14 +216,16 @@ func init() {
 func main() {
 	flag.BoolVar(&enableLeaderElection, "leader-elect", true, "Enable leader election for controller manager")
 	flag.StringVar(&namespace, "namespace", "cdp", "Deploy namespace")
+	flag.StringVar(&probeAddr, "health-probe-bind-address", ":8081", "The address the health probe endpoint binds to")
 
 	flag.Parse()
 
 	mgr, err := ctrl.NewManager(ctrl.GetConfigOrDie(), ctrl.Options{
 		Scheme:                  scheme,
-		LeaderElection:          true,
+		LeaderElection:          enableLeaderElection,
 		LeaderElectionID:        "static-pv-releaser",
 		LeaderElectionNamespace: namespace,
+		HealthProbeBindAddress:  probeAddr,
 	})
 	if err != nil {
 		setupLog.Error(err, "unable to start manager")
